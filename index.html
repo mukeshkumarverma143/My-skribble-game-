@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Mini Scribble Game</title>
+  <style>
+    body {
+      font-family: Arial;
+      background: #f0f0f0;
+      text-align: center;
+    }
+    #canvas {
+      border: 2px solid #333;
+      background: #fff;
+      cursor: crosshair;
+    }
+    input, button {
+      margin: 5px;
+      padding: 6px;
+      font-size: 16px;
+    }
+    #friendsList {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>🎨 Mini Scribble Game</h2>
+  <div>
+    <input id="nameInput" placeholder="Enter your name" />
+    <button id="joinBtn">Join Game</button>
+  </div>
+  <div id="friendsList"></div>
+
+  <div id="gameArea" style="display:none;">
+    <h3 id="wordDisplay">Waiting for word...</h3>
+    <input id="wordInput" placeholder="Choose a word" />
+    <button id="chooseWordBtn">Set Word</button>
+    <br>
+    <canvas id="canvas" width="400" height="300"></canvas>
+    <div>
+      <button id="clearBtn">Clear</button>
+    </div>
+  </div>
+
+  <script type="module">
+    // Import Firebase SDKs
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getDatabase, ref, set, onValue, remove } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+
+    // Your Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyCUU9BPqhDn-RN0K2PEQAtX-I6UAvrG0jI",
+      authDomain: "webapp-dd7aa.firebaseapp.com",
+      databaseURL: "https://webapp-dd7aa-default-rtdb.firebaseio.com",
+      projectId: "webapp-dd7aa",
+      storageBucket: "webapp-dd7aa.firebasestorage.app",
+      messagingSenderId: "1080746612871",
+      appId: "1:1080746612871:web:1a9d063e06e0d675238022",
+      measurementId: "G-ZHE3JCC3W1"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const nameInput = document.getElementById("nameInput");
+    const joinBtn = document.getElementById("joinBtn");
+    const friendsList = document.getElementById("friendsList");
+    const gameArea = document.getElementById("gameArea");
+    const wordDisplay = document.getElementById("wordDisplay");
+    const wordInput = document.getElementById("wordInput");
+    const chooseWordBtn = document.getElementById("chooseWordBtn");
+    const canvas = document.getElementById("canvas");
+    const clearBtn = document.getElementById("clearBtn");
+    const ctx = canvas.getContext("2d");
+
+    let username = "";
+    let drawing = false;
+
+    // Join Game
+    joinBtn.onclick = () => {
+      username = nameInput.value.trim();
+      if (!username) return alert("Enter your name!");
+      set(ref(db, "players/" + username), { joined: Date.now() });
+      gameArea.style.display = "block";
+      nameInput.style.display = "none";
+      joinBtn.style.display = "none";
+      updateFriends();
+    };
+
+    // Update Friends list
+    function updateFriends() {
+      onValue(ref(db, "players"), (snapshot) => {
+        const data = snapshot.val() || {};
+        friendsList.innerHTML = "<b>Friends in Game:</b><br>" + Object.keys(data).join("<br>");
+      });
+    }
+
+    // Word choosing
+    chooseWordBtn.onclick = () => {
+      const word = wordInput.value.trim();
+      if (!word) return alert("Enter a word!");
+      set(ref(db, "game/word"), word);
+      wordInput.value = "";
+    };
+
+    // Show current word (hint for others)
+    onValue(ref(db, "game/word"), (snapshot) => {
+      const word = snapshot.val();
+      wordDisplay.innerText = word ? "Word: " + word : "Waiting for word...";
+    });
+
+    // Drawing
+    canvas.addEventListener("mousedown", () => (drawing = true));
+    canvas.addEventListener("mouseup", () => (drawing = false));
+    canvas.addEventListener("mousemove", draw);
+
+    function draw(e) {
+      if (!drawing) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "black";
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      // send coordinates to Firebase
+      set(ref(db, "game/lastPoint"), { x, y });
+    }
+
+    // Listen for others' drawings
+    onValue(ref(db, "game/lastPoint"), (snapshot) => {
+      const p = snapshot.val();
+      if (!p) return;
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+    });
+
+    // Clear Canvas
+    clearBtn.onclick = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      remove(ref(db, "game/lastPoint"));
+    };
+  </script>
+</body>
+</html>
